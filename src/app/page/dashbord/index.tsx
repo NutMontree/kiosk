@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 // ERROR FIX: Removed import Head from 'next/head' as it caused compilation failure in some environments.
 
 // URL ของ API Flask ที่รันอยู่
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "/api";
 
 // --- 1. กำหนด TypeScript Interfaces สำหรับ Data Structure ---
 interface Teacher {
