@@ -32,7 +32,7 @@ const StudentPage = () => {
   // Fetch Data
   const fetchStudents = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/students");
+      const response = await fetch("/api/students");
       if (!response.ok) throw new Error("Failed to fetch");
       const data = await response.json();
       setStudents(data);
@@ -104,12 +104,9 @@ const StudentPage = () => {
     if (!confirm(`Are you sure you want to delete ID: ${student_id}?`)) return;
 
     try {
-      const res = await fetch(
-        `http://localhost:5000/api/student/delete?student_id=${student_id}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const res = await fetch(`/api/student/delete?student_id=${student_id}`, {
+        method: "DELETE",
+      });
       if (res.ok) {
         fetchStudents();
       } else {
@@ -133,14 +130,11 @@ const StudentPage = () => {
     }
 
     try {
-      const res = await fetch(
-        "http://localhost:5000/api/student/delete-multiple",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ student_ids: selectedIds }),
-        }
-      );
+      const res = await fetch("/api/student/delete-multiple", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_ids: selectedIds }),
+      });
 
       const result = await res.json();
 
@@ -161,7 +155,7 @@ const StudentPage = () => {
     const method = isEditing ? "PUT" : "POST";
 
     try {
-      const res = await fetch(`http://localhost:5000${endpoint}`, {
+      const res = await fetch(`${endpoint}`, {
         method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

@@ -30,7 +30,7 @@ const TeacherPage = () => {
   // Fetch Data Function
   const fetchTeachers = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/teacher/status");
+      const response = await fetch("/api/teacher/status");
       if (!response.ok) throw new Error("Failed to fetch");
       const result = await response.json();
       setTeachers(result.teachers);
@@ -69,7 +69,7 @@ const TeacherPage = () => {
     const method = isEditing ? "PUT" : "POST";
 
     try {
-      const res = await fetch(`http://localhost:5000${endpoint}`, {
+      const res = await fetch(`${endpoint}`, {
         method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

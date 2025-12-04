@@ -51,8 +51,8 @@ export default function RegisterPage() {
       // เลือก URL ตามโหมด
       const url =
         mode === "REGISTER"
-          ? "http://localhost:5000/api/auth/register"
-          : "http://localhost:5000/api/auth/update-password";
+          ? "/api/auth/register"
+          : "/api/auth/update-password";
 
       const method = mode === "REGISTER" ? "POST" : "PUT";
 
