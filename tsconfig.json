@@ -13,6 +13,8 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "noUnusedLocals": false, // ตั้งเป็น false เพื่อปิดเช็คตัวแปร local ไม่ได้ใช้
+    "noUnusedParameters": false, // ตั้งเป็น false เพื่อปิดเช็ค parameter ไม่ได้ใช้
     "plugins": [
       {
         "name": "next"

@@ -1,0 +1,13 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "@next/next/no-img-element": "off",
+    "react/no-unescaped-entities": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    // ปิดกฎมาตรฐานของ ESLint
+    "no-unused-vars": "off",
+    
+    // ปิดกฎของ TypeScript ESLint (สำคัญมากสำหรับโปรเจกต์ TS)
+    "@typescript-eslint/no-unused-vars": "off"
+  }
+}
