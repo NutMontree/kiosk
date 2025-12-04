@@ -1,631 +1,457 @@
-/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import Image from "next/image";
-import {
-  Plus,
-  Camera,
-  X,
-  Video,
-  User,
-  Upload,
-  Trash2,
-  Edit,
-  CheckSquare,
-  Square,
-  Save,
-} from "lucide-react";
+import React, { useState, useEffect, FormEvent } from "react";
+import Link from "next/link"; // เผื่อไว้ใช้
 
-// --- Configuration ---
-const API_BASE_URL = "http://localhost:5000/api";
-
-// --- Types ---
 interface Student {
+  _id?: string;
   student_id: string;
   full_name: string;
-  year_level: string;
   class_code: string;
-  image_base64?: string;
+  year_level?: string;
 }
 
-type GroupedStudents = Record<string, Record<string, Student[]>>;
-
-// Helper Component
-interface GlassCardProps {
-  children: React.ReactNode;
-  className?: string;
-  onClick?: () => void;
-}
-
-const GlassCard = ({ children, className = "", onClick }: GlassCardProps) => (
-  <div
-    onClick={onClick}
-    className={`relative overflow-hidden bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl transition-all duration-500 group ${
-      onClick ? "cursor-pointer active:scale-[0.98]" : ""
-    } ${className}`}
-  >
-    <div className="absolute top-0 inset-x-0 h-px bg-linear-to-r from-transparent via-white/30 to-transparent opacity-50" />
-    <div className="relative">{children}</div>
-  </div>
-);
-
-export default function StudentView() {
-  const [studentMode, setStudentMode] = useState<"LIST" | "REGISTER">("LIST");
+const StudentPage = () => {
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
-  // State สำหรับการเลือกและแก้ไข
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isEditMode, setIsEditMode] = useState(false);
+  // State สำหรับการเลือกหลายรายการ
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const [newStudent, setNewStudent] = useState<Student>({
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState<Student>({
     student_id: "",
     full_name: "",
-    year_level: "",
     class_code: "",
-    image_base64: "",
+    year_level: "",
   });
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-
-  // --- Fetch Students ---
-  const fetchStudents = useCallback(async () => {
+  // Fetch Data
+  const fetchStudents = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/students`);
-      if (res.ok) {
-        setStudents(await res.json());
-      } else {
-        console.error("Failed to fetch students");
-      }
+      const response = await fetch("http://localhost:5000/api/students");
+      if (!response.ok) throw new Error("Failed to fetch");
+      const data = await response.json();
+      setStudents(data);
+      setLoading(false);
+      setSelectedIds([]); // รีเซ็ตการเลือกเมื่อโหลดข้อมูลใหม่
     } catch (err) {
-      console.error("Error fetching students:", err);
-    } finally {
+      console.error(err);
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchStudents();
-  }, [fetchStudents]);
+  }, []);
 
-  // --- Handlers: Add / Update ---
-  const handleSaveStudent = async () => {
-    if (!newStudent.student_id || !newStudent.full_name) {
-      alert("กรุณากรอกรหัสนักเรียนและชื่อ");
+  // --- Filter Logic ---
+  const filteredStudents = students.filter(
+    (s) =>
+      s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.student_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.class_code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // --- Selection Handlers ---
+
+  // เลือก/ยกเลิกเลือก รายบุคคล
+  const toggleSelect = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter((item) => item !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  // เลือกทั้งหมด / ยกเลิกทั้งหมด (เฉพาะที่ Filter อยู่)
+  const handleSelectAll = () => {
+    if (
+      selectedIds.length === filteredStudents.length &&
+      filteredStudents.length > 0
+    ) {
+      setSelectedIds([]); // ยกเลิกทั้งหมด
+    } else {
+      const allIds = filteredStudents.map((s) => s.student_id);
+      setSelectedIds(allIds); // เลือกทั้งหมด
+    }
+  };
+
+  // --- Action Handlers ---
+
+  const handleOpenAdd = () => {
+    setIsEditing(false);
+    setFormData({
+      student_id: "",
+      full_name: "",
+      class_code: "",
+      year_level: "",
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (student: Student) => {
+    setIsEditing(true);
+    setFormData(student);
+    setIsModalOpen(true);
+  };
+
+  // ลบรายคน (Single Delete)
+  const handleDeleteOne = async (student_id: string) => {
+    if (!confirm(`Are you sure you want to delete ID: ${student_id}?`)) return;
+
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/student/delete?student_id=${student_id}`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (res.ok) {
+        fetchStudents();
+      } else {
+        alert("Failed to delete");
+      }
+    } catch (error) {
+      alert("Error connecting to server");
+    }
+  };
+
+  // ลบหลายรายการ (Bulk Delete)
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+
+    if (
+      !confirm(
+        `⚠️ WARNING: You are about to delete ${selectedIds.length} students. This cannot be undone.\nConfirm deletion?`
+      )
+    ) {
       return;
     }
 
-    // เลือก Endpoint และ Method ตามโหมด (เพิ่มใหม่ vs แก้ไข)
-    const endpoint = isEditMode
-      ? `${API_BASE_URL}/student/update`
-      : `${API_BASE_URL}/student/add`;
-    const method = isEditMode ? "PUT" : "POST";
-
-    try {
-      const res = await fetch(endpoint, {
-        method: method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newStudent),
-      });
-
-      if (res.ok) {
-        alert(isEditMode ? "แก้ไขข้อมูลสำเร็จ" : "เพิ่มนักเรียนสำเร็จ");
-        resetForm();
-        fetchStudents();
-        setStudentMode("LIST");
-      } else {
-        const errorData = await res.json();
-        alert(`Error: ${errorData.message}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Server Error: Is Flask running?");
-    }
-  };
-
-  // --- Handlers: Delete Single ---
-  const handleDeleteSingle = async (id: string) => {
-    if (!confirm(`ต้องการลบข้อมูลรหัส ${id} ใช่หรือไม่?`)) return;
     try {
       const res = await fetch(
-        `${API_BASE_URL}/student/delete?student_id=${id}`,
-        { method: "DELETE" }
+        "http://localhost:5000/api/student/delete-multiple",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ student_ids: selectedIds }),
+        }
       );
+
+      const result = await res.json();
+
       if (res.ok) {
-        alert("ลบข้อมูลสำเร็จ");
+        alert(result.message);
         fetchStudents();
       } else {
-        alert("ลบข้อมูลไม่สำเร็จ");
+        alert("Failed to delete: " + result.message);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      alert("Cannot connect to server");
     }
   };
 
-  // --- Handlers: Delete Multiple ---
-  const handleDeleteMultiple = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    if (!confirm(`ยืนยันการลบข้อมูลจำนวน ${ids.length} รายการ?`)) return;
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    const endpoint = isEditing ? "/api/student/update" : "/api/student/add";
+    const method = isEditing ? "PUT" : "POST";
 
     try {
-      const res = await fetch(`${API_BASE_URL}/student/delete-multiple`, {
-        method: "POST",
+      const res = await fetch(`http://localhost:5000${endpoint}`, {
+        method: method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ student_ids: ids }),
+        body: JSON.stringify(formData),
       });
 
       if (res.ok) {
-        alert("ลบข้อมูลที่เลือกสำเร็จ");
-        setSelectedIds(new Set());
+        setIsModalOpen(false);
         fetchStudents();
       } else {
-        alert("เกิดข้อผิดพลาดในการลบข้อมูล");
+        const errData = await res.json();
+        alert(`Error: ${errData.message}`);
       }
     } catch (error) {
-      console.error(error);
-      alert("Server connection failed");
+      alert("Cannot connect to server");
     }
   };
-
-  // --- Handlers: Selection & Edit UI ---
-  const toggleSelection = (id: string) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedIds(newSet);
-  };
-
-  const handleSelectAll = () => {
-    if (selectedIds.size === students.length) {
-      setSelectedIds(new Set()); // Deselect all
-    } else {
-      setSelectedIds(new Set(students.map((s) => s.student_id))); // Select all
-    }
-  };
-
-  const handleEditClick = (student: Student) => {
-    setNewStudent(student);
-    setIsEditMode(true);
-    setStudentMode("REGISTER");
-  };
-
-  const resetForm = () => {
-    setNewStudent({
-      student_id: "",
-      full_name: "",
-      year_level: "",
-      class_code: "",
-      image_base64: "",
-    });
-    setIsEditMode(false);
-    setIsCameraOpen(false);
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
-    }
-  };
-
-  // --- Camera & File Handlers ---
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("File size too large (max 2MB)");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewStudent({ ...newStudent, image_base64: reader.result as string });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const startCamera = async () => {
-    setIsCameraOpen(true);
-    if (newStudent.image_base64)
-      setNewStudent({ ...newStudent, image_base64: "" });
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (err) {
-      console.error(err);
-      alert("ไม่สามารถเปิดกล้องได้");
-      setIsCameraOpen(false);
-    }
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
-      const imageSrc = canvas.toDataURL("image/jpeg");
-      setNewStudent({ ...newStudent, image_base64: imageSrc });
-      stopCamera();
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
-    }
-    setIsCameraOpen(false);
-  };
-
-  // --- Grouping Logic ---
-  const groupedStudents = students.reduce<GroupedStudents>((acc, student) => {
-    const year = student.year_level || "Unknown";
-    const classroom = student.class_code || "Unknown";
-    if (!acc[year]) acc[year] = {};
-    if (!acc[year][classroom]) acc[year][classroom] = [];
-    acc[year][classroom].push(student);
-    return acc;
-  }, {});
-
-  if (loading)
-    return (
-      <div className="flex justify-center items-center h-screen bg-gray-900 text-cyan-500 font-['Orbitron']">
-        Loading Students...
-      </div>
-    );
 
   return (
-    <div className="min-h-screen bg-gray-900 p-8 text-white font-mono">
-      {/* --- Top Navigation Bar --- */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div className="bg-slate-900/50 p-1 rounded-full border border-white/10 flex">
-          <button
-            onClick={() => {
-              setStudentMode("LIST");
-              resetForm();
-            }}
-            className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${
-              studentMode === "LIST"
-                ? "bg-cyan-600 text-white"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            VIEW ALL LIST
-          </button>
-          <button
-            onClick={() => {
-              setStudentMode("REGISTER");
-              resetForm();
-            }}
-            className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${
-              studentMode === "REGISTER"
-                ? "bg-purple-600 text-white"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            NEW REGISTER
-          </button>
+    <div className="min-h-screen bg-gray-900 text-cyan-300 font-mono p-4 sm:p-8">
+      {/* Header & Controls */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-8 border-b border-cyan-600/30 pb-4 gap-4">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-['Orbitron'] font-bold tracking-wider text-white">
+            STUDENT <span className="text-cyan-400">ROSTER</span>
+          </h1>
+          <p className="text-xs text-gray-400 tracking-widest mt-1">
+            TOTAL RECORDS: {students.length}
+          </p>
         </div>
 
-        {/* --- Action Bar (Visible in LIST mode) --- */}
-        {studentMode === "LIST" && (
-          <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row w-full xl:w-auto gap-4 items-center">
+          {/* Search Box */}
+          <input
+            type="text"
+            placeholder="Search Student..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full sm:w-64 bg-gray-800/50 border border-cyan-500/50 rounded py-2 px-4 text-white focus:outline-none focus:ring-1 focus:ring-cyan-400"
+          />
+
+          {/* BULK ACTIONS */}
+          <div className="flex gap-2 w-full sm:w-auto">
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="flex-1 sm:flex-none bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded shadow-[0_0_10px_rgba(220,38,38,0.5)] transition-all animate-pulse whitespace-nowrap"
+              >
+                DELETE ({selectedIds.length})
+              </button>
+            )}
+
             <button
               onClick={handleSelectAll}
-              className="px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-xs hover:bg-slate-700 flex items-center gap-2"
+              className="flex-1 sm:flex-none bg-gray-700 hover:bg-gray-600 text-cyan-300 border border-cyan-500/30 py-2 px-4 rounded transition-all whitespace-nowrap"
             >
-              {selectedIds.size === students.length && students.length > 0 ? (
-                <CheckSquare size={16} className="text-cyan-400" />
-              ) : (
-                <Square size={16} />
-              )}
-              SELECT ALL
+              {selectedIds.length === filteredStudents.length &&
+              filteredStudents.length > 0
+                ? "DESELECT ALL"
+                : "SELECT ALL"}
             </button>
-            {selectedIds.size > 0 && (
-              <button
-                onClick={handleDeleteMultiple}
-                className="px-4 py-2 bg-red-600/20 border border-red-500/50 text-red-400 rounded-lg text-xs hover:bg-red-600 hover:text-white transition-all flex items-center gap-2 animate-pulse"
-              >
-                <Trash2 size={16} /> DELETE ({selectedIds.size})
-              </button>
-            )}
+
+            <button
+              onClick={handleOpenAdd}
+              className="flex-1 sm:flex-none bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded shadow-[0_0_10px_rgba(34,197,94,0.5)] transition-all whitespace-nowrap"
+            >
+              + ADD
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
-      {studentMode === "LIST" ? (
-        <div className="grid gap-6">
-          {Object.keys(groupedStudents)
-            .sort()
-            .map((year) => (
-              <div key={year} className="space-y-4">
-                <h3 className="text-xl font-['Orbitron'] text-cyan-400 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-cyan-500 rounded-full" /> Year:{" "}
-                  {year}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.keys(groupedStudents[year])
-                    .sort()
-                    .map((cls) => (
-                      <GlassCard
-                        key={cls}
-                        className="p-5 border-l-4 border-l-purple-500"
-                      >
-                        <div className="flex justify-between items-center mb-3 border-b border-white/5 pb-2">
-                          <span className="font-bold text-white">
-                            Class: {cls}
-                          </span>
-                          <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded">
-                            {groupedStudents[year][cls].length} Students
-                          </span>
-                        </div>
-                        <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-                          {groupedStudents[year][cls].map((s) => {
-                            const isSelected = selectedIds.has(s.student_id);
-                            return (
-                              <div
-                                key={s.student_id}
-                                className={`flex items-center gap-3 text-sm p-2 rounded transition-all border ${
-                                  isSelected
-                                    ? "bg-cyan-900/30 border-cyan-500/50"
-                                    : "border-transparent hover:bg-white/5"
-                                }`}
-                              >
-                                {/* Checkbox */}
-                                <div
-                                  onClick={() => toggleSelection(s.student_id)}
-                                  className="cursor-pointer text-slate-400 hover:text-white"
-                                >
-                                  {isSelected ? (
-                                    <CheckSquare
-                                      size={18}
-                                      className="text-cyan-400"
-                                    />
-                                  ) : (
-                                    <Square size={18} />
-                                  )}
-                                </div>
-                                {/* Avatar */}
-                                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center overflow-hidden relative shrink-0">
-                                  {s.image_base64 ? (
-                                    <Image
-                                      src={s.image_base64}
-                                      alt={s.full_name}
-                                      fill
-                                      className="object-cover"
-                                      unoptimized
-                                    />
-                                  ) : (
-                                    <User className="w-4 h-4" />
-                                  )}
-                                </div>
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-white truncate">
-                                    {s.full_name}
-                                  </div>
-                                  <div className="text-[10px] font-mono text-slate-500">
-                                    {s.student_id}
-                                  </div>
-                                </div>
-                                {/* Action Buttons */}
-                                <div className="flex gap-1">
-                                  <button
-                                    onClick={() => handleEditClick(s)}
-                                    className="p-1.5 hover:bg-yellow-500/20 rounded text-slate-400 hover:text-yellow-400 transition-colors"
-                                    title="Edit"
-                                  >
-                                    <Edit size={14} />
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      handleDeleteSingle(s.student_id)
-                                    }
-                                    className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400 transition-colors"
-                                    title="Delete"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </GlassCard>
-                    ))}
-                </div>
-              </div>
-            ))}
-          {students.length === 0 && (
-            <div className="text-center text-slate-500 py-10">
-              No students found.
-            </div>
-          )}
+      {/* Student List */}
+      {loading ? (
+        <div className="text-center mt-20 text-cyan-500 animate-pulse">
+          Accessing Database...
         </div>
       ) : (
-        // --- REGISTER / EDIT FORM ---
-        <GlassCard className="p-8 max-w-3xl mx-auto border-t-4 border-t-purple-500">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white font-['Orbitron'] flex items-center gap-3">
-              {isEditMode ? (
-                <Edit className="text-yellow-400" />
-              ) : (
-                <Plus className="text-purple-400" />
-              )}
-              {isEditMode
-                ? "Edit Student Information"
-                : "New Student Registration"}
-            </h2>
-            {isEditMode && (
-              <button
-                onClick={resetForm}
-                className="text-xs text-red-400 hover:underline"
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredStudents.map((student) => {
+            const isSelected = selectedIds.includes(student.student_id);
+
+            return (
+              <div
+                key={student._id || student.student_id}
+                onClick={() => toggleSelect(student.student_id)} // คลิกที่การ์ดเพื่อเลือกได้เลย
+                className={`rounded-lg p-5 border transition-all group relative cursor-pointer select-none
+                        ${
+                          isSelected
+                            ? "bg-cyan-900/30 border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+                            : "bg-gray-800 border-cyan-600/20 hover:border-cyan-400 hover:bg-gray-800/80"
+                        }
+                    `}
               >
-                Cancel Edit
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              {/* 1. Education Level */}
-              <div>
-                <label className="text-xs text-slate-400 font-bold uppercase">
-                  1. Education Level
-                </label>
-                <select
-                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white mt-1 focus:border-cyan-500 outline-none appearance-none cursor-pointer"
-                  value={newStudent.year_level}
-                  onChange={(e) =>
-                    setNewStudent({ ...newStudent, year_level: e.target.value })
-                  }
-                >
-                  <option value="" className="text-slate-500">
-                    -- เลือกระดับชั้น --
-                  </option>
-                  <optgroup label="ระดับ ปวช.">
-                    <option value="ปวช.1">ปวช. 1</option>
-                    <option value="ปวช.2">ปวช. 2</option>
-                    <option value="ปวช.3">ปวช. 3</option>
-                  </optgroup>
-                  <optgroup label="ระดับ ปวส.">
-                    <option value="ปวส.1">ปวส. 1</option>
-                    <option value="ปวส.2">ปวส. 2</option>
-                  </optgroup>
-                </select>
-              </div>
-              {/* 2. Full Name */}
-              <div>
-                <label className="text-xs text-slate-400 font-bold uppercase">
-                  2. Full Name
-                </label>
-                <input
-                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white mt-1 focus:border-cyan-500 outline-none"
-                  placeholder="ชื่อ-นามสกุล"
-                  value={newStudent.full_name}
-                  onChange={(e) =>
-                    setNewStudent({ ...newStudent, full_name: e.target.value })
-                  }
-                />
-              </div>
-              {/* 3. Student ID */}
-              <div>
-                <label className="text-xs text-slate-400 font-bold uppercase">
-                  3. Student ID
-                </label>
-                <input
-                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white mt-1 focus:border-cyan-500 outline-none"
-                  placeholder="รหัสนักศึกษา"
-                  value={newStudent.student_id}
-                  disabled={isEditMode}
-                  onChange={(e) =>
-                    setNewStudent({ ...newStudent, student_id: e.target.value })
-                  }
-                />
-              </div>
-              {/* 4. Class Room */}
-              <div>
-                <label className="text-xs text-slate-400 font-bold uppercase">
-                  4. Class Room
-                </label>
-                <input
-                  className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-white mt-1 focus:border-cyan-500 outline-none"
-                  placeholder="ห้องเรียน (เช่น 1/1)"
-                  value={newStudent.class_code}
-                  onChange={(e) =>
-                    setNewStudent({ ...newStudent, class_code: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            {/* Camera / Image Upload */}
-            <div className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-2xl p-4 bg-black/20">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept="image/*"
-              />
-              {isCameraOpen ? (
-                <div className="relative w-full h-48 bg-black rounded-lg overflow-hidden mb-4">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    onClick={capturePhoto}
-                    className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-white text-black px-4 py-1 rounded-full text-xs font-bold shadow-lg"
-                  >
-                    CAPTURE
-                  </button>
-                </div>
-              ) : newStudent.image_base64 ? (
-                <div className="relative w-40 h-40 mb-4">
-                  <img
-                    src={newStudent.image_base64}
-                    alt="Preview"
-                    className="w-full h-full object-cover rounded-xl border border-white/20"
-                  />
-                  <button
-                    onClick={() =>
-                      setNewStudent({ ...newStudent, image_base64: "" })
-                    }
-                    className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 z-10"
-                  >
-                    <X className="w-3 h-3 text-white" />
-                  </button>
-                </div>
-              ) : (
+                {/* Checkbox Indicator */}
                 <div
-                  className="text-center text-slate-500 mb-4 cursor-pointer hover:text-cyan-400 transition-colors group"
-                  onClick={() => fileInputRef.current?.click()}
+                  className={`absolute top-3 left-3 w-5 h-5 rounded border flex items-center justify-center transition-colors
+                        ${
+                          isSelected
+                            ? "bg-cyan-500 border-cyan-500"
+                            : "border-gray-500 bg-gray-900"
+                        }
+                  `}
                 >
-                  <div className="relative inline-block">
-                    <Camera className="w-12 h-12 mx-auto mb-2 opacity-50 group-hover:opacity-100 transition-opacity" />
-                    <Upload className="w-5 h-5 absolute -right-1 -bottom-1 text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                  <p className="text-xs font-bold group-hover:underline decoration-cyan-400 underline-offset-4">
-                    No Image Captured
-                  </p>
-                  <p className="text-[10px] opacity-70 mt-1">
-                    (Click to Upload)
-                  </p>
+                  {isSelected && (
+                    <svg
+                      className="w-3 h-3 text-black font-bold"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={4}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  )}
                 </div>
-              )}
-              {!isCameraOpen && !newStudent.image_base64 && (
-                <button
-                  onClick={startCamera}
-                  className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white text-xs font-bold flex items-center justify-center gap-2 mt-2"
-                >
-                  <Video className="w-3 h-3" /> OPEN CAMERA
-                </button>
-              )}
-            </div>
-          </div>
 
-          <button
-            onClick={handleSaveStudent}
-            className={`w-full py-4 mt-6 text-white font-bold rounded-xl shadow-lg transition-all font-['Orbitron'] tracking-widest text-sm ${
-              isEditMode
-                ? "bg-linear-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500"
-                : "bg-linear-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500"
-            }`}
-          >
-            {isEditMode ? (
-              <span className="flex items-center justify-center gap-2">
-                <Save size={18} /> SAVE CHANGES
-              </span>
-            ) : (
-              "REGISTER STUDENT"
-            )}
-          </button>
-        </GlassCard>
+                {/* Action Buttons (Edit/Delete Single) - หยุด Propagation เพื่อไม่ให้ไปกวนการเลือกการ์ด */}
+                <div className="absolute top-3 right-3 flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenEdit(student);
+                    }}
+                    className="text-gray-400 hover:text-yellow-400 p-1 hover:bg-gray-700 rounded"
+                    title="Edit"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
+                  {/* ปุ่มลบเดี่ยวๆ (เผื่ออยากลบแค่คนเดียวเร็วๆ) */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteOne(student.student_id);
+                    }}
+                    className="text-gray-400 hover:text-red-500 p-1 hover:bg-gray-700 rounded"
+                    title="Delete"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3 mb-2 mt-4">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-cyan-300 font-bold border 
+                        ${
+                          isSelected
+                            ? "bg-cyan-800 border-cyan-400"
+                            : "bg-cyan-900 border-cyan-500/50"
+                        }`}
+                  >
+                    {student.full_name.charAt(0)}
+                  </div>
+                  <div>
+                    <div className="text-cyan-400 font-bold text-sm">
+                      {student.student_id}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Class: {student.class_code}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-white font-semibold truncate pl-1">
+                  {student.full_name}
+                </div>
+                {student.year_level && (
+                  <div className="text-xs text-gray-500 pl-1 mt-1">
+                    Year: {student.year_level}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal - ใช้เหมือนเดิมแต่ปรับ UI ให้รับ input ได้ถูกต้อง */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 border border-cyan-500 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <h2 className="text-xl font-['Orbitron'] text-white mb-4">
+              {isEditing ? "EDIT STUDENT" : "ADD NEW STUDENT"}
+            </h2>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Student ID
+                </label>
+                <input
+                  type="text"
+                  required
+                  disabled={isEditing}
+                  value={formData.student_id || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, student_id: e.target.value })
+                  }
+                  className={`w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-cyan-500 focus:outline-none ${
+                    isEditing ? "opacity-50" : ""
+                  }`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.full_name || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, full_name: e.target.value })
+                  }
+                  className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Class Code
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.class_code || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, class_code: e.target.value })
+                    }
+                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-cyan-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-400 mb-1">
+                    Year Level
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.year_level || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, year_level: e.target.value })
+                    }
+                    className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-white focus:border-cyan-500 focus:outline-none"
+                    placeholder="e.g. 1, 2"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 rounded shadow-lg shadow-cyan-900/50"
+                >
+                  CONFIRM
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
-}
+};
+
+export default StudentPage;
